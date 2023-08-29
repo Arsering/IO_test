@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libfio_mine.a  CMakeFiles/fio_mine.dir/fio_test.cpp.o CMakeFiles/fio_mine.dir/logger.cpp.o
+/usr/bin/ranlib ../../lib/libfio_mine.a

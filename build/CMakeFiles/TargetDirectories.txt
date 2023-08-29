@@ -1,0 +1,6 @@
+/data/experiment_space/fio_mine/build/CMakeFiles/rebuild_cache.dir
+/data/experiment_space/fio_mine/build/CMakeFiles/edit_cache.dir
+/data/experiment_space/fio_mine/build/CMakeFiles/IO_test.dir
+/data/experiment_space/fio_mine/build/src/CMakeFiles/rebuild_cache.dir
+/data/experiment_space/fio_mine/build/src/CMakeFiles/edit_cache.dir
+/data/experiment_space/fio_mine/build/src/CMakeFiles/fio_mine.dir
