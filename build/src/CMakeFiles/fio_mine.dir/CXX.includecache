@@ -29,6 +29,8 @@ deque
 -
 fstream
 -
+vector
+-
 
 ../include/logger.h
 cstdint
@@ -46,6 +48,10 @@ condition_variable
 thread
 -
 deque
+-
+random
+-
+algorithm
 -
 value.h
 ../include/value.h
@@ -74,6 +80,8 @@ sys/stat.h
 stdlib.h
 -
 sys/mman.h
+-
+vector
 -
 fio_mine.h
 /data/experiment_space/fio_mine/src/fio_mine.h

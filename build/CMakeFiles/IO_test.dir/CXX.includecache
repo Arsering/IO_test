@@ -29,6 +29,8 @@ deque
 -
 fstream
 -
+vector
+-
 
 ../include/logger.h
 cstdint
@@ -46,6 +48,10 @@ condition_variable
 thread
 -
 deque
+-
+random
+-
+algorithm
 -
 value.h
 ../include/value.h

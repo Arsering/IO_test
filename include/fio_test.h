@@ -5,19 +5,29 @@
 #include <thread>
 #include <deque>
 #include <fstream>
+#include <vector>
 
 namespace fio_test
 {
 #define MMAP_SIZE 1024 * 1024 * 1024
+#define MMAP_ADVICE MADV_RANDOM
 // #define FILE_OPEN_FLAGS O_RDWR | O_DIRECT
 #define FILE_OPEN_FLAGS O_RDWR | O_DIRECT
+
+    enum TestType
+    {
+        SCAN = 0,
+        RANDOM = 1
+    };
 
     class WTest
     {
     private:
-        static std::atomic<size_t> thread_count_;
+        static std::atomic<size_t>
+            thread_count_;
 
-        std::unique_ptr<std::ofstream> log_file_;
+        std::unique_ptr<std::ofstream>
+            log_file_;
         size_t file_size_ = 0;
         std::thread operator_;
         bool exit_flag_ = false;
@@ -48,13 +58,15 @@ namespace fio_test
         size_t io_num_ = 0;
         std::thread operator_;
         bool exit_flag_ = false;
+        std::vector<int> order_;
 
         int ScanFile();
+        int RandomReadFile();
         void OperationThread();
         std::string GetFilePath(std::string &file_name);
 
     public:
-        static std::atomic<size_t> durations[100];
+        static std::atomic<size_t> latencys_[100];
 
         ~RTest();
         /**
@@ -64,7 +76,7 @@ namespace fio_test
          * @param thread_num
          * @param file_size unit size is word (eight bytes)
          */
-        RTest(std::string &file_name, size_t slot_size, size_t io_size, size_t io_num);
+        RTest(TestType test_type, std::string &file_name, size_t slot_size, size_t io_size, size_t io_num, std::vector<int> order);
     };
 
     class MRTest
@@ -78,13 +90,15 @@ namespace fio_test
         size_t io_num_ = 0;
         std::thread operator_;
         bool exit_flag_ = false;
+        std::vector<int> order_;
 
         int ScanFile();
+        int RandomReadFile();
         void OperationThread();
         std::string GetFilePath(std::string &file_name);
 
     public:
-        static std::atomic<size_t> durations[100];
+        static std::atomic<size_t> latencys_[100];
 
         ~MRTest();
         /**
@@ -94,7 +108,7 @@ namespace fio_test
          * @param thread_num
          * @param file_size unit size is word (eight bytes)
          */
-        MRTest(std::string &file_name, size_t slot_size, size_t io_size, size_t io_num);
+        MRTest(TestType test_type, std::string &file_name, size_t slot_size, size_t io_size, size_t io_num, std::vector<int> order);
     };
 
 }

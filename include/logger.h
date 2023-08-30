@@ -25,6 +25,8 @@
 #include <condition_variable>
 #include <thread>
 #include <deque>
+#include <random>
+#include <algorithm>
 
 #include "value.h"
 
@@ -117,4 +119,6 @@ namespace logger
                              : "=a"(lo), "=d"(hi));
         return ((size_t)lo) | (((size_t)hi) << 32);
     }
+
+    void shuffle_mine(std::vector<int> &input);
 } // namespace logger

@@ -163,4 +163,11 @@ namespace logger
         return 0;
     }
 
+    void shuffle_mine(std::vector<int> &input)
+    {
+        std::random_device rd;
+        std::mt19937 rng(rd());
+
+        std::shuffle(input.begin(), input.end(), rng);
+    }
 } // namespace logger
