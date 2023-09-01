@@ -19,7 +19,7 @@ namespace fio_test
 {
     std::atomic<size_t> WTest::thread_count_(0);
 
-    int logger_start(const std::string &log_file_name)
+    int logger_start(const std::string& log_file_name)
     {
         log_file_.open(log_file_name, std::ios::out);
         return 0;
@@ -42,12 +42,12 @@ namespace fio_test
         return 0;
     }
 
-    WTest::WTest(std::string &file_name, size_t file_size) : file_size_(file_size),
-                                                             exit_flag_(false)
+    WTest::WTest(std::string& file_name, size_t file_size) : file_size_(file_size),
+        exit_flag_(false)
     {
         log_file_ = open(GetFilePath(file_name).c_str(), O_RDWR | O_CREAT);
         operator_ = std::thread([this]()
-                                { OperationThread(); });
+            { OperationThread(); });
     }
     WTest::~WTest()
     {
@@ -58,8 +58,8 @@ namespace fio_test
 
     int WTest::WriteRandomData()
     {
-        char *str = "abcdefgh";
-        char *out_buf = (char *)malloc(1024);
+        char* str = "abcdefgh";
+        char* out_buf = (char*)malloc(1024);
 
         size_t buf_size = 0;
         while (buf_size < 1024)
@@ -67,12 +67,12 @@ namespace fio_test
             buf_size += sprintf(out_buf + buf_size, "%s", str);
         }
         ftruncate(log_file_, 1024 * file_size_);
-        void *log_file_mmaped = mmap(NULL, MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, log_file_, 0);
+        void* log_file_mmaped = mmap(NULL, MMAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, log_file_, 0);
         madvise(log_file_mmaped, MMAP_SIZE, MADV_SEQUENTIAL); // Turn off readahead
 
         for (int i = 0; i < file_size_; i++)
         {
-            memcpy((char *)log_file_mmaped + 1024 * i, out_buf, 1024);
+            memcpy((char*)log_file_mmaped + 1024 * i, out_buf, 1024);
         }
         return 0;
     }
@@ -80,7 +80,7 @@ namespace fio_test
     {
         WriteRandomData();
     }
-    inline std::string WTest::GetFilePath(std::string &file_name)
+    inline std::string WTest::GetFilePath(std::string& file_name)
     {
         std::string file_path = file_name + "test-" + std::to_string(thread_count_) + ".fio";
         std::cout << file_path << std::endl;
@@ -89,7 +89,7 @@ namespace fio_test
 
     std::atomic<size_t> IOTest::thread_count_(0);
 
-    IOTest::IOTest(IOMode io_mode, IOEngine io_engine, std::string &test_path, size_t slot_size, size_t io_size, size_t io_num, std::vector<int> order) : io_mode_(io_mode), io_engine_(io_engine), slot_size_(slot_size), io_size_(io_size), io_num_(io_num), order_(std::move(order)), exit_flag_(false)
+    IOTest::IOTest(IOMode io_mode, IOEngine io_engine, std::string& test_path, size_t slot_size, size_t io_size, size_t io_num, size_t iter_num, std::vector<int> order) : io_mode_(io_mode), io_engine_(io_engine), slot_size_(slot_size), io_size_(io_size), io_num_(io_num), iter_num_(iter_num), order_(std::move(order)), exit_flag_(false)
     {
         thread_id_ = thread_count_.fetch_add(1);
 
@@ -98,11 +98,12 @@ namespace fio_test
         {
             std::cout << "Open file failed!!!" << std::endl;
         }
-        start_time_ = (size_t *)calloc(io_num_, sizeof(size_t));
-        stop_time_ = (size_t *)calloc(io_num_, sizeof(size_t));
+        start_time_ = (size_t*)calloc(io_num_ * iter_num_, sizeof(size_t));
+        stop_time_ = (size_t*)calloc(io_num_ * iter_num_, sizeof(size_t));
         operator_ = std::thread([this]()
-                                { ReadFile(); });
+            { ReadFile(); });
     }
+
     IOTest::~IOTest()
     {
         operator_.join();
@@ -131,68 +132,72 @@ namespace fio_test
 
     int IOTest::MRead()
     {
-        void *log_file_mmaped = mmap(NULL, MMAP_SIZE, PROT_READ, MAP_SHARED | MAP_NORESERVE, data_file_, 0);
+        void* log_file_mmaped = mmap(NULL, MMAP_SIZE, PROT_READ, MAP_SHARED | MAP_NORESERVE, data_file_, 0);
         madvise(log_file_mmaped, MMAP_SIZE, MMAP_ADVICE); // Turn off readahead
 
-        char *in_buf = (char *)calloc(1, 1);
+        char* in_buf = (char*)calloc(1, 1);
         size_t start = 0;
         size_t latency = 0;
         volatile int a = 0;
-        for (auto i : order_)
+        for (int j = 0; j < iter_num_; j++)
         {
-            start_time_[i] = logger::Profl::GetSystemTime();
-            // Create one page fault
-            memcpy(in_buf, (char *)log_file_mmaped + slot_size_ * i, 1);
-            stop_time_[i] = logger::Profl::GetSystemTime();
-            // Prevent this code section from compiler optimization
-            if (strcmp(in_buf, "a") == 0)
+            for (auto i : order_)
             {
-                a = 0;
-            }
-            else
-            {
-                a = 1;
+                size_t index = i + j * io_num_;
+                start_time_[index] = logger::Profl::GetSystemTime();
+                // Create one page fault
+                memcpy(in_buf, (char*)log_file_mmaped + slot_size_ * i, 1);
+                stop_time_[index] = logger::Profl::GetSystemTime();
+                // Prevent this code section from compiler optimization
+                if (strcmp(in_buf, "a") == 0)
+                {
+                    a = 0;
+                }
+                else
+                {
+                    a = 1;
+                }
             }
         }
-
-        // latencys_[thread_id_].store(latency / order_.size());
         free(in_buf);
         return 0;
     }
 
     int IOTest::PRead()
     {
-        char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
-        char *tmp_buf = (char *)malloc(1);
+        char* in_buf = (char*)aligned_alloc(512 * 8, io_size_);
+        char* tmp_buf = (char*)malloc(1);
         size_t start = 0, end = 0;
         size_t latency = 0;
         volatile int a = 0;
-
-        for (auto i : order_)
+        for (int j = 0; j < iter_num_; j++)
         {
-            start_time_[i] = logger::Profl::GetSystemTime();
-            int ret = pread(data_file_, in_buf, io_size_, slot_size_ * i);
-            memcpy(tmp_buf, in_buf, 1);
-            stop_time_[i] = logger::Profl::GetSystemTime();
-            // latency += logger::Profl::GetSystemTime() - start;
-            if (strcmp(tmp_buf, "a") == 0)
+            for (auto i : order_)
             {
-                a = 0;
-            }
-            else
-            {
-                a = 1;
+                size_t index = i + j * io_num_;
+                start_time_[index] = logger::Profl::GetSystemTime();
+                int ret = pread(data_file_, in_buf, io_size_, slot_size_ * i);
+                memcpy(tmp_buf, in_buf, 1);
+                stop_time_[index] = logger::Profl::GetSystemTime();
+
+                // Prevent this code section from compiler optimization
+                if (strcmp(tmp_buf, "a") == 0)
+                {
+                    a = 0;
+                }
+                else
+                {
+                    a = 1;
+                }
             }
         }
-        // latencys_[thread_id_].store(latency / order_.size());
-        // std::cout << durations[thread_id_] << std::endl;
 
         free(in_buf);
         free(tmp_buf);
         return 0;
     }
 
-    inline std::string IOTest::GetFilePath(std::string &file_name)
+    inline std::string IOTest::GetFilePath(std::string& file_name)
     {
 
         std::string file_path = file_name + "/test-" + std::to_string(thread_id_) + ".fio";
