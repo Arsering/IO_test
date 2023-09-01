@@ -31,6 +31,8 @@ fstream
 -
 vector
 -
+mutex
+-
 
 ../include/logger.h
 cstdint
@@ -82,6 +84,8 @@ stdlib.h
 sys/mman.h
 -
 vector
+-
+mutex
 -
 fio_mine.h
 /data/experiment_space/fio_mine/src/fio_mine.h

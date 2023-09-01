@@ -1,5 +1,6 @@
 #include "boost/filesystem.hpp"
 #include <iostream>
+#include <string>
 #include <filesystem>
 #include <unistd.h>
 #include <string.h>
@@ -14,41 +15,49 @@ void create_test_files(std::string &path, size_t thread_num)
     }
 }
 
-size_t test_pread(fio_test::TestType test_type, std::string &path, size_t thread_num, size_t slot_size, size_t io_size, size_t io_num, std::vector<int> order)
+size_t analyze_logs(const std::string &log_file_path)
 {
+    std::ifstream log_file(log_file_path, std::ios::in);
+    std::string tmp, str;
+    size_t io_num = 0;
+    std::vector<size_t> start_time;
+    std::vector<size_t> stop_time;
+    size_t duration = 0;
+    while (getline(log_file, tmp))
     {
-        std::deque<fio_test::RTest> thread_pool;
-
-        for (int i = 0; i < thread_num; i++)
+        io_num = std::stoull(tmp);
+        while (io_num > 0)
         {
-            thread_pool.emplace_back(test_type, path, slot_size, io_size, io_num, order);
+            getline(log_file, tmp, ',');
+            start_time.push_back(std::stoull(tmp));
+            getline(log_file, tmp);
+            stop_time.push_back(std::stoull(tmp));
+            io_num--;
         }
     }
-    size_t latency = 0;
-    for (int i = 0; i < thread_num; i++)
+    for (int i = 0; i < start_time.size(); i++)
     {
-        latency += fio_test::RTest::latencys_[i].load();
+        duration += stop_time[i] - start_time[i];
     }
-    return latency / thread_num;
+
+    duration /= start_time.size();
+    return duration;
 }
 
-size_t test_mread(fio_test::TestType test_type, std::string &path, size_t thread_num, size_t slot_size, size_t io_size, size_t io_num, std::vector<int> order)
+size_t test_read(fio_test::IOMode io_mode, fio_test::IOEngine io_engine, std::string &test_path, size_t thread_num, size_t slot_size, size_t io_size, size_t io_num, std::vector<int> order)
 {
+    std::string log_file_path = test_path + "/logs.log";
+    fio_test::logger_start(log_file_path);
     {
-        std::deque<fio_test::MRTest> thread_pool;
+        std::deque<fio_test::IOTest> thread_pool;
+
         for (int i = 0; i < thread_num; i++)
         {
-            thread_pool.emplace_back(test_type, path, slot_size, io_size, io_num, order);
+            thread_pool.emplace_back(io_mode, io_engine, test_path, slot_size, io_size, io_num, order);
         }
     }
-
-    size_t latency = 0;
-
-    for (int i = 0; i < thread_num; i++)
-    {
-        latency += fio_test::MRTest::latencys_[i].load();
-    }
-    return latency / thread_num;
+    fio_test::logger_stop();
+    return analyze_logs(log_file_path);
 }
 
 void test_memcpy(int block_num)
@@ -98,7 +107,7 @@ std::vector<int> create_order(size_t io_num, const std::string &file_name)
 {
     std::vector<int> order_output(io_num);
 
-    std::iota(order_output.begin(), order_output.end(), 1);
+    std::iota(order_output.begin(), order_output.end(), 0);
     logger::shuffle_mine(order_output);
     std::ofstream outFile;
     outFile.open(file_name, std::ios::out | std::ios::trunc);
@@ -121,15 +130,14 @@ int main(int argc, char *argv[])
     std::string order_file_path = (root_dir / "configuration" / "data.order").string();
 
     std::string file_dir = "/data/lgraph_db";
-    std::string file_name = "test";
     boost::filesystem::path test_dir(file_dir + "/test_dir");
 
     boost::filesystem::create_directory(test_dir);
-    std::string path = (test_dir / file_name).string();
+    std::string test_path = test_dir.string();
     std::cout
-        << "Current working directory: " << path << std::endl;
+        << "Current working directory: " << test_path << std::endl;
 
-    size_t thread_num = 100;
+    size_t thread_num = 2;
     size_t durations[thread_num];
     // create_test_files(path, thread_num);
     // return 0;
@@ -138,9 +146,9 @@ int main(int argc, char *argv[])
     logger::profl_init(log_dir);
 
     /** unit == byte*/
-    size_t io_size = 512 * 8;
-    size_t slot_size = 128 * 1024;
-    size_t io_num = 1024 * 4;
+    size_t io_size = 512 * 256;
+    size_t slot_size = 1024 * 128;
+    size_t io_num = 1024 * 8;
 
     /** Get random order */
     std::cout << "Read order file from path " << order_file_path << std::endl;
@@ -153,27 +161,30 @@ int main(int argc, char *argv[])
 
     size_t latency = 0;
     std::cout << argv[1] << std::endl;
-    fio_test::TestType test_type = fio_test::TestType::RANDOM;
-    if (strcmp(argv[1], "pread") == 0)
+    fio_test::IOMode io_mode = fio_test::IOMode::RANDOM;
+    ;
+    fio_test::IOEngine io_engine;
+    if (strcmp(argv[1], "mread") == 0)
     {
-        latency = test_pread(test_type, path, thread_num, slot_size, io_size, io_num, std::move(order_input));
-        std::cout << "Average latency of pread = " << latency << std::endl;
+        io_engine = fio_test::IOEngine::MMAP;
     }
-    else if (strcmp(argv[1], "mread") == 0)
+    else if (strcmp(argv[1], "pread") == 0)
     {
+        io_engine = fio_test::IOEngine::PRW;
+    }
 
-        latency = test_mread(test_type, path, thread_num, slot_size, io_size, io_num, std::move(order_input));
-        std::cout << "Average latency of mread = " << latency << std::endl;
-    }
-    else if (strcmp(argv[1], "mm") == 0)
-    {
+    latency = test_read(io_mode, io_engine, test_path, thread_num, slot_size, io_size, io_num, std::move(order_input));
+    std::cout << "Average latency of " << argv[1] << " = " << latency << std::endl;
 
-        test_memcpy(atoi(argv[2]));
-    }
-    else
-    {
-        std::cout << "Illegal argument value" << std::endl;
-    }
+    // if (strcmp(argv[1], "mm") == 0)
+    // {
+
+    //     test_memcpy(atoi(argv[2]));
+    // }
+    // else
+    // {
+    //     std::cout << "Illegal argument value" << std::endl;
+    // }
 
     return 0;
 }
