@@ -184,6 +184,7 @@ namespace fio_test
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
                 ret = pwrite(data_file_, out_buf, io_size_, slot_size_ * i);
+                fdatasync(data_file_);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 if (ret == -1)
                 {
@@ -201,8 +202,14 @@ namespace fio_test
     {
         std::cout << "mread" << std::endl;
         size_t file_size_inByte = slot_size_ * io_num_;
-        void *log_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
-        madvise(log_file_mmaped, file_size_inByte, MMAP_ADVICE); // Turn off readahead
+        void *data_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
+        if (data_file_mmaped == MAP_FAILED)
+        {
+            perror("Problem mmapping file");
+            close(data_file_);
+            return 1;
+        }
+        madvise(data_file_mmaped, file_size_inByte, MMAP_ADVICE); // Turn off readahead
 
         char *in_buf = (char *)calloc(1, 1);
         size_t start = 0;
@@ -215,7 +222,7 @@ namespace fio_test
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
                 // Create one page fault
-                memcpy(in_buf, (char *)log_file_mmaped + slot_size_ * i, 1);
+                memcpy(in_buf, (char *)data_file_mmaped + slot_size_ * i, 1);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 // Prevent this code section from compiler optimization
                 if (strcmp(in_buf, "a") == 0)
@@ -229,6 +236,7 @@ namespace fio_test
             }
         }
         free(in_buf);
+        munmap(data_file_mmaped, file_size_inByte);
         return 0;
     }
 
@@ -237,8 +245,15 @@ namespace fio_test
         std::cout << "mwrite" << std::endl;
         size_t file_size_inByte = slot_size_ * io_num_;
         ftruncate(data_file_, file_size_inByte);
-        void *log_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
-        madvise(log_file_mmaped, file_size_inByte, MMAP_ADVICE); // Turn off readahead
+        void *data_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
+        if (data_file_mmaped == MAP_FAILED)
+        {
+            perror("Problem mmapping file");
+            close(data_file_);
+            return 1;
+        }
+
+        madvise(data_file_mmaped, file_size_inByte, MMAP_ADVICE); // Turn off readahead
 
         char *str = "abcdefgh";
         char *out_buf = (char *)aligned_alloc(512 * 8, io_size_);
@@ -254,10 +269,13 @@ namespace fio_test
             {
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                memcpy((char *)log_file_mmaped + slot_size_ * i, out_buf, io_size_);
+                memcpy((char *)data_file_mmaped + slot_size_ * i, out_buf, io_size_);
+                fdatasync(data_file_);
                 stop_time_[index] = logger::Profl::GetSystemTime();
             }
         }
+        munmap(data_file_mmaped, file_size_inByte);
+        free(out_buf);
         return 0;
     }
 

@@ -202,8 +202,8 @@ int main(int argc, char *argv[])
     /** unit == byte*/
     size_t thread_num = std::stoull(argv[++arg_index]);
     size_t io_size = std::stoull(argv[++arg_index]);
-    size_t slot_size = 1024 * 4;
-    size_t io_num = 1024 * 256;
+    size_t slot_size = 1024 * 128;
+    size_t io_num = 1024 * 16;
     size_t iter_num = std::stoull(argv[++arg_index]); // for SSD saturation
 
     /** Get random order */
