@@ -1,7 +1,10 @@
 cd bin
-echo 1 > /proc/sys/vm/drop_caches
-echo 1 > /proc/sys/vm/drop_caches
-echo 1 > /proc/sys/vm/drop_caches
-# rm -rf /data/lgraph_db/test_dir/*
+
+IO_ENGINE="mmap" # mmap or pio 
+RorW="write" # read or write or mix
+THREAD_NUM=1
+let IO_SIZE=1024*4
+ITER_NUM=1
+
 # cgexec -g memory:yz_4g ./bin/IO_test
-./IO_test pread
+./IO_test ${IO_ENGINE} ${RorW} ${THREAD_NUM} ${IO_SIZE} ${ITER_NUM}

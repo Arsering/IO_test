@@ -64,9 +64,9 @@ cstring
 string
 -
 
-/data/experiment_space/fio_mine/main.cpp
+/data/experiment_space/Large-scale-Graph-Storage-on-Single-Machine/main.cpp
 boost/filesystem.hpp
-/data/experiment_space/fio_mine/boost/filesystem.hpp
+/data/experiment_space/Large-scale-Graph-Storage-on-Single-Machine/boost/filesystem.hpp
 iostream
 -
 string
@@ -78,5 +78,5 @@ unistd.h
 string.h
 -
 fio_mine.h
-/data/experiment_space/fio_mine/fio_mine.h
+/data/experiment_space/Large-scale-Graph-Storage-on-Single-Machine/fio_mine.h
 

@@ -1,1 +1,1 @@
-/usr/bin/clang++   -std=c++11 -Wall -Wextra -lpthread -O0   CMakeFiles/IO_test.dir/main.cpp.o  -o ../bin/IO_test   -L/data/experiment_space/fio_mine/lib  -Wl,-rpath,/data/experiment_space/fio_mine/lib ../lib/libfio_mine.a -lboost_filesystem 
+/usr/bin/clang++   -std=c++11 -Wall -Wextra -lpthread -O0   CMakeFiles/IO_test.dir/main.cpp.o  -o ../bin/IO_test   -L/data/experiment_space/Large-scale-Graph-Storage-on-Single-Machine/lib  -Wl,-rpath,/data/experiment_space/Large-scale-Graph-Storage-on-Single-Machine/lib ../lib/libfio_mine.a -lboost_filesystem 

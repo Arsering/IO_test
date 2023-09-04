@@ -1,4 +1,4 @@
-# Install script for directory: /data/experiment_space/fio_mine/src
+# Install script for directory: /data/experiment_space/Large-scale-Graph-Storage-on-Single-Machine/src
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
