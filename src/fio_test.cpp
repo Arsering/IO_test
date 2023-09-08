@@ -200,7 +200,7 @@ namespace fio_test
 
     int IOTest::MRead()
     {
-        std::cout << "mread" << std::endl;
+        // std::cout << "mread" << std::endl;
         size_t file_size_inByte = slot_size_ * io_num_;
         void *data_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
         if (data_file_mmaped == MAP_FAILED)
@@ -242,7 +242,7 @@ namespace fio_test
 
     int IOTest::MWrite()
     {
-        std::cout << "mwrite" << std::endl;
+        // std::cout << "mwrite" << std::endl;
         size_t file_size_inByte = slot_size_ * io_num_;
         ftruncate(data_file_, file_size_inByte);
         void *data_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
