@@ -60,6 +60,8 @@ namespace fio_test
 
         size_t thread_id_ = 0;
         int data_file_;
+        void *data_file_mmaped_;
+        bool private_file_; // 0: private file;1: shared file
         IOMode io_mode_;
         IOEngine io_engine_;
         size_t slot_size_ = 0;
@@ -91,6 +93,6 @@ namespace fio_test
          * @param thread_num
          * @param file_size unit size is word (eight bytes)
          */
-        IOTest(IOMode io_mode, IOEngine io_engine, fio_test::RorW ioro, std::string &file_name, size_t slot_size, size_t io_size, size_t io_num, size_t iter_num, std::vector<int> order);
+        IOTest(IOMode io_mode, IOEngine io_engine, fio_test::RorW ioro, std::string &file_name, size_t slot_size, size_t io_size, size_t io_num, size_t iter_num, int fd = -1, void *data_file_mmaped = NULL);
     };
 }

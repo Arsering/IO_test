@@ -77,6 +77,10 @@ unistd.h
 -
 string.h
 -
+sys/file.h
+-
+sys/mman.h
+-
 fio_mine.h
 /data/experiment_space/Large-scale-Graph-Storage-on-Single-Machine/fio_mine.h
 

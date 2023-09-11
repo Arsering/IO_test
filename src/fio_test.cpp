@@ -44,11 +44,20 @@ namespace fio_test
 
     std::atomic<size_t> IOTest::thread_count_(0);
 
-    IOTest::IOTest(IOMode io_mode, IOEngine io_engine, RorW ioro, std::string &test_path, size_t slot_size, size_t io_size, size_t io_num, size_t iter_num, std::vector<int> order) : io_mode_(io_mode), io_engine_(io_engine), slot_size_(slot_size), io_size_(io_size), io_num_(io_num), iter_num_(iter_num), order_(std::move(order)), exit_flag_(false)
+    IOTest::IOTest(IOMode io_mode, IOEngine io_engine, RorW ioro, std::string &test_path, size_t slot_size, size_t io_size, size_t io_num, size_t iter_num, int fd, void *data_file_mmaped) : io_mode_(io_mode), io_engine_(io_engine), slot_size_(slot_size), io_size_(io_size), io_num_(io_num), iter_num_(iter_num), exit_flag_(false)
     {
         thread_id_ = thread_count_.fetch_add(1);
-
-        data_file_ = open(GetFilePath(ioro, test_path).c_str(), FILE_OPEN_FLAGS | O_CREAT);
+        if (fd == -1)
+        {
+            data_file_ = open(GetFilePath(ioro, test_path).c_str(), FILE_OPEN_FLAGS | O_CREAT);
+            private_file_ = true;
+        }
+        else
+        {
+            data_file_ = fd;
+            data_file_mmaped_ = data_file_mmaped;
+            private_file_ = false;
+        }
 
         if (data_file_ == -1)
         {
@@ -57,6 +66,15 @@ namespace fio_test
 
         start_time_ = (size_t *)calloc(io_num_ * iter_num_, sizeof(size_t));
         stop_time_ = (size_t *)calloc(io_num_ * iter_num_, sizeof(size_t));
+
+        std::vector<int> order_output(io_num_);
+        std::iota(order_output.begin(), order_output.end(), 0);
+        if (io_mode_ == IOMode::RANDOM)
+        {
+            logger::shuffle_mine(order_output);
+        }
+        order_ = std::move(order_output);
+
         switch (ioro)
         {
         case RorW::RO:
@@ -85,20 +103,24 @@ namespace fio_test
         logger_logging(io_num_, start_time_, stop_time_);
         free(start_time_);
         free(stop_time_);
-        close(data_file_);
+        if (private_file_)
+        {
+            close(data_file_);
+        }
+        // munmap(data_file_mmaped_, file_size_inByte);
     }
 
     int IOTest::ReadFile()
     {
-        if (io_mode_ == IOMode::SCAN)
-        {
-            std::vector<int> order_output(io_num_);
-            std::iota(order_output.begin(), order_output.end(), 0);
-            order_ = std::move(order_output);
-        }
         switch (io_engine_)
         {
         case IOEngine::MMAP:
+            if (private_file_)
+            {
+                size_t file_size_inByte = slot_size_ * io_num_;
+                data_file_mmaped_ = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
+                madvise(data_file_mmaped_, file_size_inByte, MMAP_ADVICE); // Turn off readahead
+            }
             return MRead();
         case IOEngine::PRW:
             return PRead();
@@ -107,15 +129,20 @@ namespace fio_test
 
     int IOTest::WriteFile()
     {
-        if (io_mode_ == IOMode::SCAN)
-        {
-            std::vector<int> order_output(io_num_);
-            std::iota(order_output.begin(), order_output.end(), 0);
-            order_ = std::move(order_output);
-        }
+
         switch (io_engine_)
         {
         case IOEngine::MMAP:
+            if (private_file_)
+            {
+                size_t file_size_inByte = slot_size_ * io_num_;
+
+                ftruncate(data_file_, file_size_inByte);
+
+                data_file_mmaped_ = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
+
+                madvise(data_file_mmaped_, file_size_inByte, MMAP_ADVICE); // Turn off readahead
+            }
             return MWrite();
         case IOEngine::PRW:
             return PWrite();
@@ -124,21 +151,23 @@ namespace fio_test
 
     int IOTest::PRead()
     {
+        size_t file_offset = 1024 * 1024 * 1024 * 8 * thread_id_;
         char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
         char *tmp_buf = (char *)malloc(1);
         size_t start = 0, end = 0;
         size_t latency = 0;
         volatile int a = 0;
+        int ret = -1;
         for (int j = 0; j < iter_num_; j++)
         {
             for (auto i : order_)
             {
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                int ret = pread(data_file_, in_buf, io_size_, slot_size_ * i);
+                ret = pread(data_file_, in_buf, io_size_, file_offset + slot_size_ * i);
                 memcpy(tmp_buf, in_buf, 1);
                 stop_time_[index] = logger::Profl::GetSystemTime();
-                if (ret == -1)
+                if (ret != io_size_)
                 {
                     std::cout << "Function pread failed!!!" << std::endl;
                     return -1;
@@ -152,7 +181,10 @@ namespace fio_test
                 else
                 {
                     a = 1;
+                    std::cout << "pread content error!!!" << std::endl;
+                    return -1;
                 }
+                tmp_buf[0] = ' ';
             }
         }
 
@@ -184,7 +216,7 @@ namespace fio_test
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
                 ret = pwrite(data_file_, out_buf, io_size_, slot_size_ * i);
-                fdatasync(data_file_);
+                fsync(data_file_);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 if (ret == -1)
                 {
@@ -200,17 +232,7 @@ namespace fio_test
 
     int IOTest::MRead()
     {
-        // std::cout << "mread" << std::endl;
-        size_t file_size_inByte = slot_size_ * io_num_;
-        void *data_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
-        if (data_file_mmaped == MAP_FAILED)
-        {
-            perror("Problem mmapping file");
-            close(data_file_);
-            return 1;
-        }
-        madvise(data_file_mmaped, file_size_inByte, MMAP_ADVICE); // Turn off readahead
-
+        size_t file_offset = 1024 * 1024 * 1024 * 8 * thread_id_;
         char *in_buf = (char *)calloc(1, 1);
         size_t start = 0;
         size_t latency = 0;
@@ -222,7 +244,7 @@ namespace fio_test
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
                 // Create one page fault
-                memcpy(in_buf, (char *)data_file_mmaped + slot_size_ * i, 1);
+                memcpy(in_buf, (char *)data_file_mmaped_ + file_offset + slot_size_ * i, 1);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 // Prevent this code section from compiler optimization
                 if (strcmp(in_buf, "a") == 0)
@@ -232,29 +254,19 @@ namespace fio_test
                 else
                 {
                     a = 1;
+                    std::cout << "pread content error!!!" << std::endl;
+                    return -1;
                 }
             }
         }
         free(in_buf);
-        munmap(data_file_mmaped, file_size_inByte);
         return 0;
     }
 
     int IOTest::MWrite()
     {
-        // std::cout << "mwrite" << std::endl;
-        size_t file_size_inByte = slot_size_ * io_num_;
-        ftruncate(data_file_, file_size_inByte);
-        void *data_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file_, 0);
-        if (data_file_mmaped == MAP_FAILED)
-        {
-            perror("Problem mmapping file");
-            close(data_file_);
-            return 1;
-        }
-
-        madvise(data_file_mmaped, file_size_inByte, MMAP_ADVICE); // Turn off readahead
-
+        size_t file_offset = 1024 * 1024 * 1024 * 8 * thread_id_;
+        std::cout << "mwrite" << std::endl;
         char *str = "abcdefgh";
         char *out_buf = (char *)aligned_alloc(512 * 8, io_size_);
 
@@ -269,12 +281,11 @@ namespace fio_test
             {
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                memcpy((char *)data_file_mmaped + slot_size_ * i, out_buf, io_size_);
-                fdatasync(data_file_);
+                memcpy((char *)data_file_mmaped_ + file_offset + slot_size_ * i, out_buf, io_size_);
+                // fsync(data_file_);
                 stop_time_[index] = logger::Profl::GetSystemTime();
             }
         }
-        munmap(data_file_mmaped, file_size_inByte);
         free(out_buf);
         return 0;
     }

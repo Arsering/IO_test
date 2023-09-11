@@ -60,6 +60,9 @@
         "list": "cpp",
         "iomanip": "cpp",
         "iostream": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "numeric": "cpp",
+        "source_location": "cpp",
+        "shared_mutex": "cpp"
     }
 }

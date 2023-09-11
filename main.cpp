@@ -4,10 +4,13 @@
 #include <filesystem>
 #include <unistd.h>
 #include <string.h>
+#include <sys/file.h>
+#include <sys/mman.h>
+
 // #include "include/yaml-cpp/yaml.h"
 
 #include "fio_mine.h"
-void create_RO_test_files(std::string &test_path, size_t thread_num, std::vector<int> order)
+void create_RO_test_files(std::string &test_path, size_t thread_num)
 {
     std::string test_dir = test_path + "/W_test";
     if (boost::filesystem::exists(test_dir))
@@ -30,7 +33,7 @@ void create_RO_test_files(std::string &test_path, size_t thread_num, std::vector
 
         for (int i = 0; i < thread_num; i++)
         {
-            thread_pool.emplace_back(io_mode, io_engine, ioro, test_path, slot_size, io_size, io_num, iter_num, order);
+            thread_pool.emplace_back(io_mode, io_engine, ioro, test_path, slot_size, io_size, io_num, iter_num);
         }
     }
 }
@@ -64,7 +67,7 @@ size_t analyze_logs(const std::string &log_file_path)
     return duration;
 }
 
-size_t test_io(fio_test::IOMode io_mode, fio_test::IOEngine io_engine, fio_test::RorW row, std::string &test_path, size_t thread_num, size_t slot_size, size_t io_size, size_t io_num, size_t iter_num, std::vector<int> order)
+size_t test_io(fio_test::IOMode io_mode, fio_test::IOEngine io_engine, fio_test::RorW row, std::string &test_path, size_t thread_num, size_t slot_size, size_t io_size, size_t io_num, size_t iter_num)
 {
     if (row != fio_test::RorW::RO)
     {
@@ -78,15 +81,44 @@ size_t test_io(fio_test::IOMode io_mode, fio_test::IOEngine io_engine, fio_test:
 
     std::string log_file_path = test_path + "/logs.log";
     fio_test::logger_start(log_file_path);
+    std::string file_name;
+    if (row != fio_test::RorW::RO)
+    {
+        file_name = test_path + "/W_test" + "/data" + ".fio";
+    }
+    else
+    {
+        file_name = test_path + "/RO_test" + "/data" + ".fio";
+    }
+    std::cout << file_name << std::endl;
+    int data_file = open(file_name.c_str(), O_RDWR | O_DIRECT | O_CREAT);
+    if (data_file == -1)
+    {
+        std::cout << "test_io: Open file failed!!!" << std::endl;
+        return -1;
+    }
+    size_t file_size_inByte = slot_size * io_num * thread_num;
+    if (row != fio_test::RorW::RO)
+    {
+        ftruncate(data_file, file_size_inByte);
+    }
+    void *data_file_mmaped = NULL;
+    if (io_engine == fio_test::IOEngine::MMAP)
+    {
+        data_file_mmaped = mmap(NULL, file_size_inByte, PROT_READ | PROT_WRITE, MAP_SHARED, data_file, 0);
+        madvise(data_file_mmaped, file_size_inByte, MMAP_ADVICE); // Turn off readahead
+    }
     {
         std::deque<fio_test::IOTest> thread_pool;
 
         for (int i = 0; i < thread_num; i++)
         {
-            thread_pool.emplace_back(io_mode, io_engine, row, test_path, slot_size, io_size, io_num, iter_num, order);
+            // thread_pool.emplace_back(io_mode, io_engine, row, test_path, slot_size, io_size, io_num, iter_num);
+            thread_pool.emplace_back(io_mode, io_engine, row, test_path, slot_size, io_size, io_num, iter_num, data_file, data_file_mmaped);
         }
     }
     fio_test::logger_stop();
+    close(data_file);
     return analyze_logs(log_file_path);
 }
 
@@ -203,18 +235,8 @@ int main(int argc, char *argv[])
     size_t thread_num = std::stoull(argv[++arg_index]);
     size_t io_size = std::stoull(argv[++arg_index]);
     size_t slot_size = 1024 * 128;
-    size_t io_num = 1024 * 16;
+    size_t io_num = 1024 * 8 * 8;
     size_t iter_num = std::stoull(argv[++arg_index]); // for SSD saturation
-
-    /** Get random order */
-    std::cout
-        << "Read order file" << std::endl;
-    std::vector<int> order_input = get_order(order_file_path);
-    if (order_input.size() != io_num)
-    {
-        std::cout << "Create and store new order into " << order_file_path << std::endl;
-        order_input = create_order(io_num, order_file_path);
-    }
 
     // create_RO_test_files(test_path, thread_num, std::move(order_input));
     // return 0;
@@ -223,7 +245,7 @@ int main(int argc, char *argv[])
     system("echo 1 > /proc/sys/vm/drop_caches");
 
     size_t latency = 0;
-    latency = test_io(io_mode, io_engine, ioro, test_path, thread_num, slot_size, io_size, io_num, iter_num, std::move(order_input));
+    latency = test_io(io_mode, io_engine, ioro, test_path, thread_num, slot_size, io_size, io_num, iter_num);
     std::cout << "Average latency of " << argv[1] << " = " << latency << std::endl;
 
     // if (strcmp(argv[1], "mm") == 0)
