@@ -50,12 +50,14 @@ namespace fio_test
         if (fd == -1)
         {
             data_file_ = open(GetFilePath(ioro, test_path).c_str(), FILE_OPEN_FLAGS | O_CREAT);
+            file_offset_ = 0;
             private_file_ = true;
         }
         else
         {
             data_file_ = fd;
             data_file_mmaped_ = data_file_mmaped;
+            file_offset_ = 1024LU * 1024LU * 1024LU * 8LU * thread_id_;
             private_file_ = false;
         }
 
@@ -151,8 +153,12 @@ namespace fio_test
 
     int IOTest::PRead()
     {
-        size_t file_offset = 1024 * 1024 * 1024 * 8 * thread_id_;
-        char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
+        size_t io_size_new = io_size_ * 16;
+        size_t last_io_fileoffset = 0;
+        size_t last_io_fileend = 0;
+        size_t curr_io_fileoffset = 0;
+
+        char *in_buf = (char *)aligned_alloc(512 * 8, io_size_new);
         char *tmp_buf = (char *)malloc(1);
         size_t start = 0, end = 0;
         size_t latency = 0;
@@ -163,16 +169,27 @@ namespace fio_test
             for (auto i : order_)
             {
                 size_t index = i + j * io_num_;
+                curr_io_fileoffset = file_offset_ + slot_size_ * i + io_size_ * j;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                ret = pread(data_file_, in_buf, io_size_, file_offset + slot_size_ * i);
-                memcpy(tmp_buf, in_buf, 1);
-                stop_time_[index] = logger::Profl::GetSystemTime();
-                if (ret != io_size_)
+                if (curr_io_fileoffset >= last_io_fileoffset && curr_io_fileoffset < last_io_fileend)
                 {
-                    std::cout << "Function pread failed!!!" << std::endl;
-                    return -1;
+                    memcpy(tmp_buf, in_buf + (curr_io_fileoffset - last_io_fileoffset), 1);
                 }
+                else
+                {
 
+                    ret = pread(data_file_, in_buf, io_size_new, curr_io_fileoffset);
+                    last_io_fileoffset = file_offset_ + slot_size_ * i + io_size_ * j;
+                    memcpy(tmp_buf, in_buf, 1);
+                    last_io_fileend = curr_io_fileoffset + io_size_new;
+                    last_io_fileoffset = curr_io_fileoffset;
+                    // if (ret != io_size_)
+                    // {
+                    //     std::cout << "Function pread failed!!!" << std::endl;
+                    //     return -1;
+                    // }
+                }
+                stop_time_[index] = logger::Profl::GetSystemTime();
                 // Prevent this code section from compiler optimization
                 if (strcmp(tmp_buf, "a") == 0)
                 {
@@ -215,7 +232,7 @@ namespace fio_test
             {
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                ret = pwrite(data_file_, out_buf, io_size_, slot_size_ * i);
+                ret = pwrite(data_file_, out_buf, io_size_, file_offset_ + slot_size_ * i);
                 fsync(data_file_);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 if (ret == -1)
@@ -232,11 +249,11 @@ namespace fio_test
 
     int IOTest::MRead()
     {
-        size_t file_offset = 1024 * 1024 * 1024 * 8 * thread_id_;
         char *in_buf = (char *)calloc(1, 1);
         size_t start = 0;
         size_t latency = 0;
         volatile int a = 0;
+
         for (int j = 0; j < iter_num_; j++)
         {
             for (auto i : order_)
@@ -244,7 +261,7 @@ namespace fio_test
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
                 // Create one page fault
-                memcpy(in_buf, (char *)data_file_mmaped_ + file_offset + slot_size_ * i, 1);
+                memcpy(in_buf, (char *)data_file_mmaped_ + file_offset_ + slot_size_ * i + io_size_ * j, 1);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 // Prevent this code section from compiler optimization
                 if (strcmp(in_buf, "a") == 0)
@@ -257,6 +274,7 @@ namespace fio_test
                     std::cout << "pread content error!!!" << std::endl;
                     return -1;
                 }
+                in_buf[0] = ' ';
             }
         }
         free(in_buf);
@@ -265,8 +283,6 @@ namespace fio_test
 
     int IOTest::MWrite()
     {
-        size_t file_offset = 1024 * 1024 * 1024 * 8 * thread_id_;
-        std::cout << "mwrite" << std::endl;
         char *str = "abcdefgh";
         char *out_buf = (char *)aligned_alloc(512 * 8, io_size_);
 
@@ -281,8 +297,8 @@ namespace fio_test
             {
                 size_t index = i + j * io_num_;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                memcpy((char *)data_file_mmaped_ + file_offset + slot_size_ * i, out_buf, io_size_);
-                // fsync(data_file_);
+                memcpy((char *)data_file_mmaped_ + file_offset_ + slot_size_ * i, out_buf, io_size_);
+                fsync(data_file_);
                 stop_time_[index] = logger::Profl::GetSystemTime();
             }
         }

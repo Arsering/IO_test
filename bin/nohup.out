@@ -1,0 +1,18 @@
+Attaching 3 probes...
+Tracing page fault ... Hit Ctrl-C to end.
+End of bpftrace.
+
+
+@[node, 1190724]: 1
+@[cpptools-srv, 1193579]: 2
+@[bpftrace, 1194323]: 3
+@[node, 1190710]: 4
+@[IO_test, 1194324]: 4
+@[aliyun-service, 762649]: 5
+@[node, 1190641]: 12
+@[bash, 1194328]: 22
+@[bash, 1194322]: 85
+@[node, 1190699]: 118
+@[cpptools, 1190907]: 143
+@[pkill, 1194328]: 219
+

@@ -60,6 +60,7 @@ namespace fio_test
 
         size_t thread_id_ = 0;
         int data_file_;
+        size_t file_offset_;
         void *data_file_mmaped_;
         bool private_file_; // 0: private file;1: shared file
         IOMode io_mode_;

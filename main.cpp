@@ -97,7 +97,7 @@ size_t test_io(fio_test::IOMode io_mode, fio_test::IOEngine io_engine, fio_test:
         std::cout << "test_io: Open file failed!!!" << std::endl;
         return -1;
     }
-    size_t file_size_inByte = slot_size * io_num * thread_num;
+    size_t file_size_inByte = 1024LU * 1024LU * 1024LU * 8LU * thread_num;
     if (row != fio_test::RorW::RO)
     {
         ftruncate(data_file, file_size_inByte);
@@ -205,7 +205,7 @@ int main(int argc, char *argv[])
 
     std::cout << argv[1] << std::endl;
     int arg_index = 0;
-    fio_test::IOMode io_mode = fio_test::IOMode::RANDOM;
+    fio_test::IOMode io_mode = fio_test::IOMode::SCAN;
     fio_test::IOEngine io_engine;
     fio_test::RorW ioro;
     ++arg_index;
@@ -234,17 +234,15 @@ int main(int argc, char *argv[])
     /** unit == byte*/
     size_t thread_num = std::stoull(argv[++arg_index]);
     size_t io_size = std::stoull(argv[++arg_index]);
-    size_t slot_size = 1024 * 128;
-    size_t io_num = 1024 * 8 * 8;
+    size_t slot_size = 1024 * 4;
+    size_t io_num = 1024;
     size_t iter_num = std::stoull(argv[++arg_index]); // for SSD saturation
 
     // create_RO_test_files(test_path, thread_num, std::move(order_input));
     // return 0;
-    /** Empty the page cache of file_system*/
-    system("echo 1 > /proc/sys/vm/drop_caches");
-    system("echo 1 > /proc/sys/vm/drop_caches");
 
     size_t latency = 0;
+    std::cout << "slot_size=" << slot_size << "/io_size=" << io_size << std::endl;
     latency = test_io(io_mode, io_engine, ioro, test_path, thread_num, slot_size, io_size, io_num, iter_num);
     std::cout << "Average latency of " << argv[1] << " = " << latency << std::endl;
 
