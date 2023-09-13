@@ -153,12 +153,12 @@ namespace fio_test
 
     int IOTest::PRead()
     {
-        size_t io_size_new = io_size_ * 16;
-        size_t last_io_fileoffset = 0;
-        size_t last_io_fileend = 0;
-        size_t curr_io_fileoffset = 0;
-
-        char *in_buf = (char *)aligned_alloc(512 * 8, io_size_new);
+        // size_t io_size_new = io_size_ * 16;
+        // size_t last_io_fileoffset = 0;
+        // size_t last_io_fileend = 0;
+        // size_t curr_io_fileoffset = 0;
+        // char *in_buf = (char *)aligned_alloc(512 * 8, io_size_new);
+char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
         char *tmp_buf = (char *)malloc(1);
         size_t start = 0, end = 0;
         size_t latency = 0;
