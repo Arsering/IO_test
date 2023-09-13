@@ -153,17 +153,13 @@ namespace fio_test
 
     int IOTest::PRead()
     {
-        // size_t io_size_new = io_size_ * 16;
-        // size_t last_io_fileoffset = 0;
-        // size_t last_io_fileend = 0;
-        // size_t curr_io_fileoffset = 0;
-        // char *in_buf = (char *)aligned_alloc(512 * 8, io_size_new);
-char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
+        char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
         char *tmp_buf = (char *)malloc(1);
         size_t start = 0, end = 0;
         size_t latency = 0;
         volatile int a = 0;
         int ret = -1;
+        size_t curr_io_fileoffset;
         for (int j = 0; j < iter_num_; j++)
         {
             for (auto i : order_)
@@ -171,26 +167,15 @@ char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
                 size_t index = i + j * io_num_;
                 curr_io_fileoffset = file_offset_ + slot_size_ * i + io_size_ * j;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                if (curr_io_fileoffset >= last_io_fileoffset && curr_io_fileoffset < last_io_fileend)
-                {
-                    memcpy(tmp_buf, in_buf + (curr_io_fileoffset - last_io_fileoffset), 1);
-                }
-                else
-                {
-
-                    ret = pread(data_file_, in_buf, io_size_new, curr_io_fileoffset);
-                    last_io_fileoffset = file_offset_ + slot_size_ * i + io_size_ * j;
-                    memcpy(tmp_buf, in_buf, 1);
-                    last_io_fileend = curr_io_fileoffset + io_size_new;
-                    last_io_fileoffset = curr_io_fileoffset;
-                    // if (ret != io_size_)
-                    // {
-                    //     std::cout << "Function pread failed!!!" << std::endl;
-                    //     return -1;
-                    // }
-                }
+                ret = pread(data_file_, in_buf, io_size_, curr_io_fileoffset);
+                memcpy(tmp_buf, in_buf, 1);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 // Prevent this code section from compiler optimization
+                if (ret != io_size_)
+                {
+                    std::cout << "Function pread failed!!!" << std::endl;
+                    return -1;
+                }
                 if (strcmp(tmp_buf, "a") == 0)
                 {
                     a = 0;
@@ -224,15 +209,17 @@ char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
         {
             buf_size += sprintf(out_buf + buf_size, "%s", str);
         }
-        size_t start = 0, end = 0;
+
         volatile int ret = 0;
+        size_t curr_io_fileoffset;
         for (int j = 0; j < iter_num_; j++)
         {
             for (auto i : order_)
             {
                 size_t index = i + j * io_num_;
+                curr_io_fileoffset = file_offset_ + slot_size_ * i + io_size_ * j;
                 start_time_[index] = logger::Profl::GetSystemTime();
-                ret = pwrite(data_file_, out_buf, io_size_, file_offset_ + slot_size_ * i);
+                ret = pwrite(data_file_, out_buf, io_size_, curr_io_fileoffset);
                 fsync(data_file_);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 if (ret == -1)
@@ -254,14 +241,16 @@ char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
         size_t latency = 0;
         volatile int a = 0;
 
+        size_t curr_io_fileoffset =0;
         for (int j = 0; j < iter_num_; j++)
         {
             for (auto i : order_)
             {
                 size_t index = i + j * io_num_;
+                curr_io_fileoffset = file_offset_ + slot_size_ * i + io_size_ * j;
                 start_time_[index] = logger::Profl::GetSystemTime();
                 // Create one page fault
-                memcpy(in_buf, (char *)data_file_mmaped_ + file_offset_ + slot_size_ * i + io_size_ * j, 1);
+                memcpy(in_buf, (char *)data_file_mmaped_ + curr_io_fileoffset, 1);
                 stop_time_[index] = logger::Profl::GetSystemTime();
                 // Prevent this code section from compiler optimization
                 if (strcmp(in_buf, "a") == 0)
@@ -291,11 +280,13 @@ char *in_buf = (char *)aligned_alloc(512 * 8, io_size_);
         {
             buf_size += sprintf(out_buf + buf_size, "%s", str);
         }
+        size_t curr_io_fileoffset = 0;
         for (int j = 0; j < iter_num_; j++)
         {
             for (auto i : order_)
             {
                 size_t index = i + j * io_num_;
+                curr_io_fileoffset = file_offset_ + slot_size_ * i+ io_size_ * j;
                 start_time_[index] = logger::Profl::GetSystemTime();
                 memcpy((char *)data_file_mmaped_ + file_offset_ + slot_size_ * i, out_buf, io_size_);
                 fsync(data_file_);
